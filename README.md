@@ -1,177 +1,130 @@
-# 🚀 Instruções de Execução - Editor Colaborativo Distribuído
+# Editor Colaborativo Distribuído
 
-Este documento contém as instruções para executar o sistema completo (Backend + Frontend).
+Sistema de edição colaborativa em tempo real que implementa conceitos fundamentais de sistemas distribuídos: exclusão mútua, relógios lógicos de Lamport e sincronização de estado entre múltiplos clientes.
 
-## 📋 Pré-requisitos
+## Visão Geral
 
-- **Python 3.9+** (para o backend)
-- **Node.js 18+** (para o frontend)
-- **Terminal** (CMD, PowerShell, Git Bash, etc.)
+O projeto consiste em um editor de texto onde múltiplos usuários podem visualizar o documento simultaneamente, mas apenas um pode editá-lo por vez. O sistema garante consistência através de um mecanismo de lock distribuído e utiliza relógios lógicos de Lamport para ordenação de eventos.
 
-## 🔧 Configuração e Execução
+## Tecnologias
 
-### 1️⃣ Backend (FastAPI)
+**Backend:**
 
-Abra um terminal e execute:
+- FastAPI (Python)
+- Uvicorn (servidor ASGI)
+
+**Frontend:**
+
+- React 18
+- TypeScript
+- Vite
+- Tailwind CSS
+- Axios
+
+## Pré-requisitos
+
+- Python 3.9 ou superior
+- Node.js 18 ou superior
+- npm ou yarn
+
+## Instalação e Execução
+
+### Backend
 
 ```bash
-# Navegar para a pasta do backend
 cd collab-backend
 
-# (Opcional) Criar ambiente virtual Python
+# Criar e ativar ambiente virtual (recomendado)
 python -m venv venv
-
-# Ativar ambiente virtual
-# Windows (PowerShell):
-venv\Scripts\Activate.ps1
-# Windows (CMD):
-venv\Scripts\activate.bat
-# Linux/Mac:
-source venv/bin/activate
+venv\Scripts\Activate.ps1  # Windows PowerShell
+# venv\Scripts\activate.bat  # Windows CMD
+# source venv/bin/activate   # Linux/Mac
 
 # Instalar dependências
-pip install fastapi uvicorn
+pip install -r requirements.txt
+# ou: pip install fastapi uvicorn
 
 # Executar servidor
 uvicorn app.main:app --reload --port 8000
 ```
 
-✅ **Backend rodando em:** `http://localhost:8000`
+O backend estará disponível em `http://localhost:8000`
 
-### 2️⃣ Frontend (React + TypeScript)
-
-Abra **outro terminal** (mantenha o backend rodando) e execute:
+### Frontend
 
 ```bash
-# Navegar para a pasta do frontend
 cd collab-frontend
 
-# Instalar dependências (apenas na primeira vez)
+# Instalar dependências
 npm install
 
-# Executar servidor de desenvolvimento
+# Executar em modo de desenvolvimento
 npm run dev
 ```
 
-✅ **Frontend rodando em:** `http://localhost:3000`
+O frontend estará disponível em `http://localhost:5173`
 
-## 🧪 Testando o Sistema Distribuído
+## Testando o Sistema
 
-### Teste 1: Exclusão Mútua
+1. Abra duas ou mais abas do navegador apontando para o frontend
+2. Em uma aba, clique em "Solicitar Edição" para obter o lock
+3. Observe que as outras abas ficam bloqueadas automaticamente
+4. Edite o texto e clique em "Salvar e Liberar"
+5. As outras abas receberão as atualizações automaticamente via polling
 
-1. Abra **duas abas** do navegador em `http://localhost:3000`
-2. Na **aba 1**, clique em **"Solicitar Edição"**
-3. Observe:
-   - **Aba 1**: Status = **EDITANDO** (azul)
-   - **Aba 2**: Status = **BLOQUEADO POR OUTRO** (vermelho)
-4. Digite algo na **aba 1** e clique em **"Salvar e Liberar"**
-5. Observe que a **aba 2** recebe as alterações automaticamente
+## Estrutura do Projeto
 
-### Teste 2: Relógios de Lamport
-
-1. Observe os **Relógios Lógicos** no painel de status
-2. A cada operação (polling, lock, update):
-   - **Relógio Local** é incrementado
-   - **Relógio Servidor** é sincronizado
-3. Regra implementada: `local_clock = max(local_clock, server_clock) + 1`
-
-### Teste 3: Sincronização Automática
-
-1. Mantenha **duas abas** abertas
-2. Edite na **aba 1** e salve
-3. A **aba 2** recebe as mudanças em até **1 segundo** (polling interval)
-
-## 📊 Endpoints da API
-
-O backend expõe os seguintes endpoints:
-
-| Método | Endpoint             | Descrição                  |
-| ------ | -------------------- | -------------------------- |
-| GET    | `/state`             | Obtém estado do documento  |
-| POST   | `/lock/acquire`      | Solicita lock de edição    |
-| POST   | `/lock/release`      | Libera lock de edição      |
-| POST   | `/document/update`   | Atualiza documento         |
-
-Você pode testar manualmente usando:
-
-```bash
-# Obter estado
-curl http://localhost:8000/state
-
-# Solicitar lock
-curl -X POST http://localhost:8000/lock/acquire \
-  -H "Content-Type: application/json" \
-  -d '{"client_id": "test-123"}'
+```text
+collab-distributed/
+├── collab-backend/          # Servidor FastAPI
+│   ├── app/
+│   │   ├── __init__.py
+│   │   ├── main.py          # Endpoints da API
+│   │   ├── models.py        # Modelos de dados
+│   │   └── service.py       # Lógica de negócio e Lamport
+│   ├── requirements.txt
+│   └── run.py
+├── collab-frontend/         # Cliente React
+│   ├── src/
+│   │   ├── features/
+│   │   │   └── editor/      # Feature de edição
+│   │   │       ├── components/
+│   │   │       ├── hooks/   # useEditor hook
+│   │   │       ├── services/
+│   │   │       └── types/
+│   │   ├── App.tsx
+│   │   └── main.tsx
+│   └── package.json
+└── README.md
 ```
 
-## 🎯 Funcionalidades Implementadas
+## Arquitetura
 
-### Backend (Python/FastAPI)
-- ✅ Gerenciamento de estado do documento
-- ✅ Sistema de lock distribuído (exclusão mútua)
-- ✅ Relógio Lógico de Lamport
-- ✅ API REST com FastAPI
-- ✅ CORS habilitado para desenvolvimento
+### Backend (FastAPI)
+
+- Gerenciamento de estado do documento
+- Sistema de lock distribuído (exclusão mútua)
+- Relógio Lógico de Lamport
+- API REST com CORS habilitado
 
 ### Frontend (React/TypeScript)
-- ✅ Arquitetura feature-based
-- ✅ Hook customizado `useEditor` com lógica de Lamport
-- ✅ Polling automático a cada 1 segundo
-- ✅ Interface com Tailwind CSS
-- ✅ Painel de status em tempo real
-- ✅ Controle de bloqueio visual
-- ✅ Sincronização automática entre clientes
 
-## 🛑 Parando os Servidores
+- Hook customizado `useEditor` com lógica de Lamport
+- Polling automático a cada 1 segundo
+- Interface com Tailwind CSS
+- Sincronização automática entre clientes
 
-### Backend
-Pressione `Ctrl + C` no terminal do backend
+## API Endpoints
 
-### Frontend
-Pressione `Ctrl + C` no terminal do frontend
+| Método | Endpoint           | Descrição                 |
+|--------|-------------------|---------------------------|
+| GET    | `/state`          | Obtém estado do documento |
+| POST   | `/lock/acquire`   | Solicita lock de edição   |
+| POST   | `/lock/release`   | Libera lock de edição     |
+| POST   | `/document/update`| Atualiza documento        |
 
-## 🐛 Solução de Problemas
+## Conceitos Implementados
 
-### Porta 8000 já em uso
-```bash
-# Windows
-netstat -ano | findstr :8000
-taskkill /PID <PID> /F
-
-# Linux/Mac
-lsof -ti:8000 | xargs kill -9
-```
-
-### Porta 3000 já em uso
-O Vite irá sugerir automaticamente outra porta (ex: 3001)
-
-### Erro de CORS
-Certifique-se de que o backend está rodando em `http://localhost:8000`
-
-### Erro "Cannot find module"
-```bash
-# Reinstalar dependências
-cd collab-frontend
-rm -rf node_modules package-lock.json
-npm install
-```
-
-## 📚 Conceitos de Sistemas Distribuídos
-
-Este projeto demonstra:
-
-1. **Exclusão Mútua**: Apenas um processo pode acessar o recurso crítico (documento)
-2. **Relógio Lógico de Lamport**: Ordenação de eventos em sistema distribuído
-3. **Sincronização**: Polling para manter estado consistente
-4. **Sistemas Cliente-Servidor**: Backend centralizado + múltiplos clientes
-
-## 📞 Suporte
-
-Em caso de dúvidas:
-- Verifique os logs no console do navegador (F12)
-- Verifique os logs no terminal do backend
-- Consulte o README.md em `collab-frontend/`
-
----
-
-**Bom teste! 🎉**
+- **Exclusão Mútua**: Controle de acesso ao documento
+- **Relógio Lógico de Lamport**: Ordenação de eventos distribuídos
+- **Sincronização**: Estado consistente entre múltiplos clientes
