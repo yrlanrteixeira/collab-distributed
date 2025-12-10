@@ -1,0 +1,64 @@
+ESTRUTURA DO PROJETO - Editor de Texto Colaborativo
+====================================================
+
+collab-backend/
+│
+├── app/                          # Pacote principal da aplicação
+│   ├── __init__.py              # Inicialização do pacote Python
+│   ├── main.py                  # (CONTROLLER) Rotas FastAPI e configuração
+│   ├── models.py                # (DTOs) Modelos Pydantic para Request/Response
+│   └── service.py               # (BUSINESS LOGIC) Algoritmos distribuídos
+│
+├── .env.example                 # Exemplo de arquivo de configuração
+├── .gitignore                   # Arquivos ignorados pelo Git
+├── README.md                    # Documentação completa do projeto
+├── requirements.txt             # Dependências Python (FastAPI, Uvicorn, Pydantic)
+├── run.py                       # Script para executar o servidor
+└── test_api.py                  # Script de teste da API
+
+ARQUIVOS PRINCIPAIS:
+====================
+
+1. app/models.py
+   - ClientIdentifier: Identifica um cliente
+   - LockRequest: Requisição de lock
+   - DocumentUpdate: Atualização de documento
+   - LockResponse: Resposta de operação de lock
+   - DocumentState: Estado completo do sistema
+   - UpdateResponse: Resposta de atualização
+
+2. app/service.py (ALGORITMOS DISTRIBUÍDOS)
+   - Classe: CollaborativeEditorService
+   
+   ALGORITMO 1 - Exclusão Mútua (Lock Centralizado):
+   • acquire_lock() - Adquire ou renova lock
+   • release_lock() - Libera lock
+   
+   ALGORITMO 2 - Relógios Lógicos de Lamport:
+   • update_document() - Aplica regra: max(server, client) + 1
+   
+   ALGORITMO 3 - Tratamento de Falhas:
+   • _check_and_revoke_expired_lock() - Revoga locks expirados (15s)
+   • get_state() - Retorna estado com verificação de timeout
+
+3. app/main.py (ROTAS)
+   - GET  /           - Informações da API
+   - GET  /state      - Estado do documento
+   - POST /lock/acquire - Adquire lock de edição
+   - POST /lock/release - Libera lock de edição
+   - POST /document/update - Atualiza documento
+
+COMANDOS ÚTEIS:
+===============
+
+# Instalar dependências
+pip install -r requirements.txt
+
+# Executar servidor
+python run.py
+
+# Testar API
+python test_api.py
+
+# Acessar documentação interativa
+http://localhost:8000/docs

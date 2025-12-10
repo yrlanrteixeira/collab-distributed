@@ -1,0 +1,9 @@
+# FastAPI e dependências para servidor web
+fastapi==0.115.6
+uvicorn[standard]==0.32.1
+
+# Validação de dados
+pydantic==2.9.2
+
+# Suporte a CORS
+python-multipart==0.0.9
