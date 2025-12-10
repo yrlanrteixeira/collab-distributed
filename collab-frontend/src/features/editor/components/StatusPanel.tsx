@@ -1,7 +1,9 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { LockStatus } from '../types';
-import { Lock, LockOpen, Users, Clock, Server } from 'lucide-react';
+import { Lock, LockOpen, Users, Clock, Server, CheckCircle, AlertCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useEffect, useState } from 'react';
+import { LockCountdown } from './LockCountdown';
 
 interface StatusPanelProps {
   myId: string;
@@ -9,6 +11,7 @@ interface StatusPanelProps {
   lockedBy: string | null;
   localClock: number;
   serverClock: number;
+  lockAcquiredAt?: number | null;
 }
 
 /**
@@ -20,7 +23,36 @@ export const StatusPanel: React.FC<StatusPanelProps> = ({
   lockedBy,
   localClock,
   serverClock,
+  lockAcquiredAt,
 }) => {
+  const [prevLocalClock, setPrevLocalClock] = useState(localClock);
+  const [prevServerClock, setPrevServerClock] = useState(serverClock);
+  const [localClockChanged, setLocalClockChanged] = useState(false);
+  const [serverClockChanged, setServerClockChanged] = useState(false);
+  const [showTooltip, setShowTooltip] = useState(false);
+
+  // Detectar mudanças de relógio e animar
+  useEffect(() => {
+    if (localClock !== prevLocalClock) {
+      setLocalClockChanged(true);
+      setPrevLocalClock(localClock);
+      const timer = setTimeout(() => setLocalClockChanged(false), 600);
+      return () => clearTimeout(timer);
+    }
+  }, [localClock, prevLocalClock]);
+
+  useEffect(() => {
+    if (serverClock !== prevServerClock) {
+      setServerClockChanged(true);
+      setPrevServerClock(serverClock);
+      const timer = setTimeout(() => setServerClockChanged(false), 600);
+      return () => clearTimeout(timer);
+    }
+  }, [serverClock, prevServerClock]);
+
+  const clockDifference = Math.abs(localClock - serverClock);
+  const isSynchronized = clockDifference === 0;
+
   const getStatusConfig = () => {
     switch (lockStatus) {
       case LockStatus.FREE:
@@ -118,6 +150,15 @@ export const StatusPanel: React.FC<StatusPanelProps> = ({
               </p>
             </div>
           )}
+
+          {/* Lock Countdown */}
+          {lockStatus === LockStatus.LOCKED_BY_ME && (
+            <LockCountdown
+              lockAcquiredAt={lockAcquiredAt || null}
+              isLockedByMe={true}
+              timeoutSeconds={15}
+            />
+          )}
         </CardContent>
       </Card>
 
@@ -127,41 +168,115 @@ export const StatusPanel: React.FC<StatusPanelProps> = ({
           <CardTitle className="text-lg flex items-center gap-2">
             <Clock className="w-5 h-5" />
             Relógios de Lamport
+            {isSynchronized && (
+              <CheckCircle className="w-5 h-5 text-green-500 ml-auto" title="Relógios sincronizados" />
+            )}
+            {!isSynchronized && (
+              <AlertCircle className="w-5 h-5 text-yellow-500 ml-auto" title="Relógios dessincronizados" />
+            )}
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
           {/* Relógio Local */}
-          <div className="p-4 bg-linear-to-br from-purple-50 to-violet-50 dark:from-purple-950/30 dark:to-violet-950/30 rounded-lg border-2 border-purple-200 dark:border-purple-800">
-            <div className="flex items-center justify-between mb-1">
+          <div
+            className={cn(
+              'p-4 rounded-lg border-2 transition-all duration-500',
+              localClockChanged
+                ? 'bg-purple-100 dark:bg-purple-900/50 border-purple-400 dark:border-purple-600 shadow-lg scale-105'
+                : 'bg-linear-to-br from-purple-50 to-violet-50 dark:from-purple-950/30 dark:to-violet-950/30 border-purple-200 dark:border-purple-800'
+            )}
+          >
+            <div className="flex items-center justify-between mb-2">
               <span className="text-xs font-semibold text-purple-700 dark:text-purple-300 uppercase">
                 Cliente (Local)
               </span>
-              <Clock className="w-4 h-4 text-purple-600 dark:text-purple-400" />
+              <div className="flex items-center gap-1">
+                <Clock className="w-4 h-4 text-purple-600 dark:text-purple-400" />
+                {localClockChanged && <span className="text-purple-600 font-bold animate-pulse">↑</span>}
+              </div>
             </div>
             <p className="text-3xl font-bold text-purple-900 dark:text-purple-100 tabular-nums">
               {localClock}
             </p>
+            <p className="text-xs text-purple-600 dark:text-purple-400 mt-1">seu relógio lógico</p>
           </div>
 
           {/* Relógio Servidor */}
-          <div className="p-4 bg-linear-to-br from-indigo-50 to-blue-50 dark:from-indigo-950/30 dark:to-blue-950/30 rounded-lg border-2 border-indigo-200 dark:border-indigo-800">
-            <div className="flex items-center justify-between mb-1">
+          <div
+            className={cn(
+              'p-4 rounded-lg border-2 transition-all duration-500',
+              serverClockChanged
+                ? 'bg-indigo-100 dark:bg-indigo-900/50 border-indigo-400 dark:border-indigo-600 shadow-lg scale-105'
+                : 'bg-linear-to-br from-indigo-50 to-blue-50 dark:from-indigo-950/30 dark:to-blue-950/30 border-indigo-200 dark:border-indigo-800'
+            )}
+          >
+            <div className="flex items-center justify-between mb-2">
               <span className="text-xs font-semibold text-indigo-700 dark:text-indigo-300 uppercase">
                 Servidor (Remoto)
               </span>
-              <Server className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
+              <div className="flex items-center gap-1">
+                <Server className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
+                {serverClockChanged && <span className="text-indigo-600 font-bold animate-pulse">↑</span>}
+              </div>
             </div>
             <p className="text-3xl font-bold text-indigo-900 dark:text-indigo-100 tabular-nums">
               {serverClock}
             </p>
+            <p className="text-xs text-indigo-600 dark:text-indigo-400 mt-1">relógio do servidor</p>
           </div>
 
-          {/* Info sobre Lamport */}
-          <div className="pt-2 border-t border-gray-200 dark:border-gray-800">
-            <p className="text-xs text-gray-500 dark:text-gray-400 leading-relaxed">
-              Os relógios garantem a <strong>ordenação causal</strong> de eventos no sistema
-              distribuído.
-            </p>
+          {/* Sincronização Status */}
+          <div
+            className={cn(
+              'p-3 rounded-lg border-2 transition-all',
+              isSynchronized
+                ? 'bg-green-50 dark:bg-green-950/20 border-green-300 dark:border-green-800'
+                : 'bg-yellow-50 dark:bg-yellow-950/20 border-yellow-300 dark:border-yellow-800'
+            )}
+          >
+            <div className="flex items-center gap-2">
+              {isSynchronized ? (
+                <CheckCircle className="w-4 h-4 text-green-600 dark:text-green-400" />
+              ) : (
+                <AlertCircle className="w-4 h-4 text-yellow-600 dark:text-yellow-400" />
+              )}
+              <span
+                className={cn(
+                  'text-xs font-medium',
+                  isSynchronized
+                    ? 'text-green-700 dark:text-green-300'
+                    : 'text-yellow-700 dark:text-yellow-300'
+                )}
+              >
+                {isSynchronized
+                  ? '✓ Relógios sincronizados'
+                  : `⚠ Diferença: ${clockDifference} eventos`}
+              </span>
+            </div>
+          </div>
+
+          {/* Info com Tooltip */}
+          <div
+            className="pt-3 border-t border-gray-200 dark:border-gray-800 cursor-help group"
+            onMouseEnter={() => setShowTooltip(true)}
+            onMouseLeave={() => setShowTooltip(false)}
+            title="Clique para saber mais sobre Lamport Clock"
+          >
+            <div className="relative">
+              <p className="text-xs text-gray-600 dark:text-gray-400 leading-relaxed group-hover:text-gray-900 dark:group-hover:text-gray-300 transition-colors">
+                Os relógios garantem a <strong>ordenação causal</strong> de eventos no sistema distribuído.
+                Cada ação incrementa os relógios automaticamente.
+              </p>
+              {showTooltip && (
+                <div className="absolute bottom-full left-0 mb-2 p-2 bg-gray-900 dark:bg-gray-100 text-white dark:text-gray-900 text-xs rounded shadow-lg w-48 z-10">
+                  <p>
+                    <strong>Lamport Clock:</strong> Número que incrementa com cada evento. Se evento A
+                    → B, então clock(A) {'<'} clock(B). Garante que é possível determinar a ordem
+                    causal dos eventos.
+                  </p>
+                </div>
+              )}
+            </div>
           </div>
         </CardContent>
       </Card>

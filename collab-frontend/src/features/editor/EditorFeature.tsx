@@ -14,6 +14,7 @@ export const EditorFeature: React.FC = () => {
     serverClock,
     localClock,
     lockStatus,
+    lockAcquiredAt,
     isLoading,
     error,
     requestEdit,
@@ -87,6 +88,7 @@ export const EditorFeature: React.FC = () => {
               lockedBy={lockedBy}
               localClock={localClock}
               serverClock={serverClock}
+              lockAcquiredAt={lockAcquiredAt}
             />
           </aside>
 

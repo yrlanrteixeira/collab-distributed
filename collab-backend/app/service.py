@@ -3,6 +3,7 @@ Service Layer - Implementação dos Algoritmos de Sistemas Distribuídos
 Contém toda a lógica de negócio do Editor Colaborativo
 """
 import time
+import hashlib
 from typing import Optional
 from threading import Lock as ThreadLock
 
@@ -19,6 +20,11 @@ class CollaborativeEditorService:
     def __init__(self, timeout_seconds: int = 15):
         # Estado do documento
         self.document_content: str = ""
+
+        # ===== DETECÇÃO DE CONFLITOS =====
+        # Hash SHA-256 do conteúdo do documento
+        # Usado para detectar mudanças entre quando cliente adquiriu lock e quando tenta salvar
+        self.document_hash: str = self._compute_hash("")
 
         # ===== ALGORITMO 1: EXCLUSÃO MÚTUA (LOCK CENTRALIZADO) =====
         # O servidor mantém o controle de um "token" ou "lock" de edição.
@@ -39,6 +45,22 @@ class CollaborativeEditorService:
         # Tempo máximo (em segundos) que um cliente pode manter o lock sem interação
         # Se exceder, o lock é revogado automaticamente
         self.timeout_seconds: int = timeout_seconds
+
+    def _compute_hash(self, content: str) -> str:
+        """
+        ===== DETECÇÃO DE CONFLITOS =====
+        Computa o hash SHA-256 de um conteúdo.
+        
+        Usado para detectar quando múltiplos clientes alteraram o documento
+        entre o momento que um cliente adquiriu o lock e quando tenta salvar.
+        
+        Args:
+            content: Conteúdo a ser hashado
+            
+        Returns:
+            str: Hash SHA-256 em formato hexadecimal
+        """
+        return hashlib.sha256(content.encode('utf-8')).hexdigest()
 
     def _check_and_revoke_expired_lock(self) -> bool:
         """
@@ -143,15 +165,17 @@ class CollaborativeEditorService:
             else:
                 return False, f"Apenas {self.lock_holder} pode liberar o lock atual"
 
-    def update_document(self, client_id: str, content: str, client_clock: int) -> tuple[bool, str, int]:
+    def update_document(self, client_id: str, content: str, client_clock: int, content_hash_before: Optional[str] = None) -> tuple[bool, str, int, bool]:
         """
-        ===== ALGORITMOS 1, 2 e 3: COMBINAÇÃO DOS TRÊS =====
+        ===== ALGORITMOS 1, 2, 3 e DETECÇÃO DE CONFLITOS =====
 
-        Atualiza o conteúdo do documento aplicando os três algoritmos:
+        Atualiza o conteúdo do documento aplicando os três algoritmos + detecção de conflitos:
 
         1. EXCLUSÃO MÚTUA: Verifica se o cliente tem permissão (possui o lock)
         2. RELÓGIOS DE LAMPORT: Atualiza o relógio lógico seguindo a regra de Lamport
         3. TRATAMENTO DE FALHAS: Verifica timeouts e renova o lock do cliente
+        4. DETECÇÃO DE CONFLITOS: Compara hash do conteúdo quando cliente adquiriu lock
+           com o hash atual. Se diferem, outro cliente editou enquanto este tinha lock.
 
         Regra do Relógio de Lamport:
         - Ao receber um evento (update) com clock do cliente:
@@ -163,9 +187,10 @@ class CollaborativeEditorService:
             client_id: ID do cliente enviando a atualização
             content: Novo conteúdo do documento
             client_clock: Relógio lógico do cliente no momento do envio
+            content_hash_before: Hash SHA-256 do conteúdo quando cliente adquiriu lock
 
         Returns:
-            tuple: (sucesso, mensagem, novo_clock_servidor)
+            tuple: (sucesso, mensagem, novo_clock_servidor, conflito_detectado)
         """
         with self._thread_lock:
             # ===== ALGORITMO 3: Verifica se há locks expirados =====
@@ -175,8 +200,17 @@ class CollaborativeEditorService:
             # Apenas o detentor do lock pode editar o documento
             if self.lock_holder != client_id:
                 current_holder = self.lock_holder or "ninguém"
-                return False, f"Acesso negado. Lock pertence a {current_holder}", self.lamport_clock
+                return False, f"Acesso negado. Lock pertence a {current_holder}", self.lamport_clock, False
 
+            # ===== DETECÇÃO DE CONFLITOS =====
+            # Verifica se o conteúdo foi modificado por outro cliente enquanto este tinha o lock
+            conflict_detected = False
+            if content_hash_before is not None and content_hash_before != self.document_hash:
+                conflict_detected = True
+                print(f"[CONFLICT DETECTED] Cliente '{client_id}' tentou salvar com conteúdo desatualizado.")
+                print(f"  Hash esperado: {content_hash_before}")
+                print(f"  Hash atual:    {self.document_hash}")
+            
             # ===== ALGORITMO 2: RELÓGIOS LÓGICOS DE LAMPORT =====
             # Aplica a regra de atualização do relógio de Lamport:
             # Ao receber mensagem: clock = max(clock_local, clock_recebido) + 1
@@ -188,6 +222,7 @@ class CollaborativeEditorService:
 
             # Atualiza o conteúdo do documento
             self.document_content = content
+            self.document_hash = self._compute_hash(content)
 
             # ===== ALGORITMO 3: Renova o lock (heartbeat) =====
             # Atualiza o timestamp para indicar que o cliente ainda está ativo
@@ -195,7 +230,7 @@ class CollaborativeEditorService:
 
             print(f"[DOCUMENT UPDATED] por '{client_id}' | Tamanho: {len(content)} chars")
 
-            return True, "Documento atualizado com sucesso", self.lamport_clock
+            return True, "Documento atualizado com sucesso", self.lamport_clock, conflict_detected
 
     def get_state(self) -> dict:
         """
@@ -204,7 +239,7 @@ class CollaborativeEditorService:
         Antes de retornar, verifica se há locks expirados (Algoritmo 3).
 
         Returns:
-            dict: Estado contendo documento, relógio, lock_holder e timestamp
+            dict: Estado contendo documento, hash, relógio, lock_holder e timestamp
         """
         with self._thread_lock:
             # ===== ALGORITMO 3: Verifica timeouts =====
@@ -212,6 +247,7 @@ class CollaborativeEditorService:
 
             return {
                 "content": self.document_content,
+                "content_hash": self.document_hash,
                 "lamport_clock": self.lamport_clock,
                 "lock_holder": self.lock_holder,
                 "lock_acquired_at": self.lock_acquired_at
