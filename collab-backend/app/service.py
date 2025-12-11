@@ -4,7 +4,7 @@ Contém toda a lógica de negócio do Editor Colaborativo
 """
 import time
 import hashlib
-from typing import Optional
+from typing import Optional, Dict
 from threading import Lock as ThreadLock
 
 
@@ -45,6 +45,18 @@ class CollaborativeEditorService:
         # Tempo máximo (em segundos) que um cliente pode manter o lock sem interação
         # Se exceder, o lock é revogado automaticamente
         self.timeout_seconds: int = timeout_seconds
+
+        # ===== HEARTBEAT: DETECÇÃO DE PRESENÇA =====
+        # Dicionário que mantém timestamp do último heartbeat de cada cliente
+        # Formato: {client_id: timestamp_do_ultimo_heartbeat}
+        self.client_heartbeats: Dict[str, float] = {}
+
+        # Tempo máximo sem heartbeat para considerar cliente desconectado (30 segundos)
+        self.heartbeat_timeout: int = 30
+
+        # Estatísticas do sistema
+        self.total_edits: int = 0  # Total de edições realizadas
+        self.total_clients_ever: set = set()  # Conjunto de todos os clientes que já conectaram
 
     def _compute_hash(self, content: str) -> str:
         """
@@ -217,7 +229,7 @@ class CollaborativeEditorService:
             old_clock = self.lamport_clock
             self.lamport_clock = max(self.lamport_clock, client_clock) + 1
 
-            print(f"[LAMPORT CLOCK] Atualizado: {old_clock} → {self.lamport_clock} "
+            print(f"[LAMPORT CLOCK] Atualizado: {old_clock} -> {self.lamport_clock} "
                   f"(client_clock={client_clock})")
 
             # Atualiza o conteúdo do documento
@@ -227,6 +239,9 @@ class CollaborativeEditorService:
             # ===== ALGORITMO 3: Renova o lock (heartbeat) =====
             # Atualiza o timestamp para indicar que o cliente ainda está ativo
             self.lock_acquired_at = time.time()
+
+            # ===== ESTATÍSTICAS =====
+            self.total_edits += 1
 
             print(f"[DOCUMENT UPDATED] por '{client_id}' | Tamanho: {len(content)} chars")
 
@@ -251,4 +266,96 @@ class CollaborativeEditorService:
                 "lamport_clock": self.lamport_clock,
                 "lock_holder": self.lock_holder,
                 "lock_acquired_at": self.lock_acquired_at
+            }
+
+    def heartbeat(self, client_id: str) -> dict:
+        """
+        ===== HEARTBEAT: DETECÇÃO DE PRESENÇA =====
+
+        Registra que um cliente está ativo/vivo.
+        Clientes devem enviar heartbeats periodicamente (ex: a cada 5 segundos).
+
+        O servidor usa esses heartbeats para:
+        1. Detectar quais clientes estão ativos
+        2. Calcular quantos usuários estão online
+        3. Identificar clientes que desconectaram sem avisar (falharam)
+
+        Args:
+            client_id: ID do cliente enviando o heartbeat
+
+        Returns:
+            dict: Confirmação do heartbeat recebido com timestamp
+        """
+        with self._thread_lock:
+            current_time = time.time()
+            self.client_heartbeats[client_id] = current_time
+
+            # Adiciona cliente ao conjunto de todos que já conectaram
+            self.total_clients_ever.add(client_id)
+
+            print(f"[HEARTBEAT] Recebido de '{client_id[:8]}...' em {current_time:.2f}")
+
+            return {
+                "success": True,
+                "client_id": client_id,
+                "timestamp": current_time,
+                "message": "Heartbeat recebido"
+            }
+
+    def get_active_clients(self) -> list[str]:
+        """
+        ===== HEARTBEAT: DETECÇÃO DE PRESENÇA =====
+
+        Retorna lista de clientes ativos (que enviaram heartbeat recentemente).
+
+        Um cliente é considerado ativo se enviou heartbeat nos últimos
+        `heartbeat_timeout` segundos (padrão: 30s).
+
+        Returns:
+            list[str]: Lista de client_ids ativos
+        """
+        with self._thread_lock:
+            current_time = time.time()
+            active_clients = []
+
+            # Filtra clientes que enviaram heartbeat recentemente
+            for client_id, last_heartbeat in self.client_heartbeats.items():
+                elapsed = current_time - last_heartbeat
+                if elapsed <= self.heartbeat_timeout:
+                    active_clients.append(client_id)
+
+            return active_clients
+
+    def get_statistics(self) -> dict:
+        """
+        ===== ESTATÍSTICAS DO SISTEMA =====
+
+        Retorna estatísticas e métricas do sistema distribuído.
+
+        Returns:
+            dict: Estatísticas incluindo:
+                - active_clients_count: Número de clientes ativos
+                - active_clients: Lista de IDs de clientes ativos
+                - total_edits: Total de edições realizadas
+                - total_clients_ever: Total de clientes únicos que já conectaram
+                - current_lock_holder: Cliente com o lock atual (ou None)
+                - server_uptime: Tempo desde que o servidor iniciou
+        """
+        with self._thread_lock:
+            # Calcula clientes ativos diretamente aqui para evitar deadlock
+            current_time = time.time()
+            active_clients = []
+            
+            for client_id, last_heartbeat in self.client_heartbeats.items():
+                elapsed = current_time - last_heartbeat
+                if elapsed <= self.heartbeat_timeout:
+                    active_clients.append(client_id)
+
+            return {
+                "active_clients_count": len(active_clients),
+                "active_clients": active_clients,
+                "total_edits": self.total_edits,
+                "total_clients_ever": len(self.total_clients_ever),
+                "current_lock_holder": self.lock_holder,
+                "lamport_clock": self.lamport_clock,
             }

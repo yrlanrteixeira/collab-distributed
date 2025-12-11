@@ -4,6 +4,7 @@ Servidor centralizado com implementação de algoritmos de Sistemas Distribuído
 """
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
 from app.models import (
     LockRequest,
     LockResponse,
@@ -27,6 +28,8 @@ app.add_middleware(
     allow_origins=[
         "http://localhost:5173",  # Vite dev server
         "http://127.0.0.1:5173",
+        "http://localhost:3000",  # React dev server
+        "http://127.0.0.1:3000",
         "*"  # Permite todas as origens (use com cautela em produção)
     ],
     allow_credentials=True,
@@ -55,7 +58,9 @@ async def root():
             "GET /state": "Obtém estado do documento",
             "POST /lock/acquire": "Adquire lock de edição",
             "POST /lock/release": "Libera lock de edição",
-            "POST /document/update": "Atualiza conteúdo do documento"
+            "POST /document/update": "Atualiza conteúdo do documento",
+            "POST /heartbeat": "Envia heartbeat de presença",
+            "GET /stats": "Obtém estatísticas do sistema"
         }
     }
 
@@ -72,7 +77,9 @@ async def get_state():
             - lock_holder: ID do cliente que possui o lock (ou None)
             - lock_acquired_at: Timestamp de quando o lock foi adquirido
     """
+    print("[DEBUG] Endpoint /state chamado")
     state = editor_service.get_state()
+    print(f"[DEBUG] Estado retornado: {state}")
     return DocumentState(**state)
 
 
@@ -165,6 +172,76 @@ async def update_document(request: DocumentUpdate):
         new_lamport_clock=new_clock,
         conflict_detected=conflict_detected
     )
+
+
+# ===== NOVOS ENDPOINTS: HEARTBEAT E ESTATÍSTICAS =====
+
+class HeartbeatRequest(BaseModel):
+    """Requisição de heartbeat"""
+    client_id: str
+
+
+class HeartbeatResponse(BaseModel):
+    """Resposta de heartbeat"""
+    success: bool
+    client_id: str
+    timestamp: float
+    message: str
+
+
+class StatisticsResponse(BaseModel):
+    """Resposta de estatísticas do sistema"""
+    active_clients_count: int
+    active_clients: list[str]
+    total_edits: int
+    total_clients_ever: int
+    current_lock_holder: str | None
+    lamport_clock: int
+
+
+@app.post("/heartbeat", response_model=HeartbeatResponse)
+async def send_heartbeat(request: HeartbeatRequest):
+    """
+    ===== HEARTBEAT: DETECÇÃO DE PRESENÇA =====
+
+    Registra que um cliente está ativo/online.
+
+    Clientes devem enviar heartbeats periodicamente (recomendado: a cada 5 segundos).
+    O servidor usa esses heartbeats para:
+    - Detectar quais clientes estão ativos
+    - Calcular número de usuários online
+    - Identificar clientes que desconectaram (sem heartbeat por 30s)
+
+    Args:
+        request: Contém client_id do cliente enviando heartbeat
+
+    Returns:
+        HeartbeatResponse: Confirmação do heartbeat com timestamp
+    """
+    result = editor_service.heartbeat(request.client_id)
+    return HeartbeatResponse(**result)
+
+
+@app.get("/stats", response_model=StatisticsResponse)
+async def get_statistics():
+    """
+    ===== ESTATÍSTICAS DO SISTEMA =====
+
+    Retorna métricas e estatísticas do sistema distribuído.
+
+    Útil para:
+    - Mostrar quantos usuários estão online
+    - Exibir total de edições realizadas
+    - Monitorar estado do sistema
+    - Demonstrar conceitos de presença distribuída
+
+    Returns:
+        StatisticsResponse: Estatísticas completas do sistema
+    """
+    print("[DEBUG] Endpoint /stats chamado")
+    stats = editor_service.get_statistics()
+    print(f"[DEBUG] Estatísticas retornadas: {stats}")
+    return StatisticsResponse(**stats)
 
 
 # ===== EXECUÇÃO DO SERVIDOR =====

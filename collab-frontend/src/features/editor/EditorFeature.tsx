@@ -1,6 +1,8 @@
 import { useEditor } from './hooks/useEditor';
+import { useHeartbeat } from './hooks/useHeartbeat';
 import { StatusPanel } from './components/StatusPanel';
 import { EditorArea } from './components/EditorArea';
+import { ActiveUsersCounter } from './components/ActiveUsersCounter';
 import { Network, X, Sparkles } from 'lucide-react';
 
 /**
@@ -22,6 +24,9 @@ export const EditorFeature: React.FC = () => {
     updateContent,
     clearError,
   } = useEditor();
+
+  // Inicia envio de heartbeats periódicos
+  useHeartbeat(myId);
 
   return (
     <div className="min-h-screen bg-linear-to-br from-slate-50 via-gray-50 to-zinc-50 dark:from-gray-950 dark:via-slate-950 dark:to-zinc-950">
@@ -80,8 +85,9 @@ export const EditorFeature: React.FC = () => {
 
         {/* Layout Grid Responsivo */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-          {/* Sidebar: Status Panel (1/3 em lg) */}
-          <aside className="lg:col-span-4">
+          {/* Sidebar: Status Panel e Contador de Usuários (1/3 em lg) */}
+          <aside className="lg:col-span-4 space-y-6">
+            <ActiveUsersCounter />
             <StatusPanel
               myId={myId}
               lockStatus={lockStatus}

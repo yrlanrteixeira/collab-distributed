@@ -169,10 +169,10 @@ export const StatusPanel: React.FC<StatusPanelProps> = ({
             <Clock className="w-5 h-5" />
             Relógios de Lamport
             {isSynchronized && (
-              <CheckCircle className="w-5 h-5 text-green-500 ml-auto" title="Relógios sincronizados" />
+              <CheckCircle className="w-5 h-5 text-green-500 ml-auto" />
             )}
             {!isSynchronized && (
-              <AlertCircle className="w-5 h-5 text-yellow-500 ml-auto" title="Relógios dessincronizados" />
+              <AlertCircle className="w-5 h-5 text-yellow-500 ml-auto" />
             )}
           </CardTitle>
         </CardHeader>
