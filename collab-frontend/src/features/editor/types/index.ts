@@ -3,8 +3,10 @@
  */
 export interface EditorState {
   content: string;
+  content_hash: string;
   lock_holder: string | null;
   lamport_clock: number;
+  lock_acquired_at: number | null;
 }
 
 /**
@@ -21,6 +23,17 @@ export interface DocumentUpdateRequest {
   client_id: string;
   content: string;
   client_clock: number;
+  content_hash_before?: string;
+}
+
+/**
+ * Resposta de atualização do documento
+ */
+export interface DocumentUpdateResponse {
+  success: boolean;
+  message: string;
+  new_lamport_clock: number;
+  conflict_detected: boolean;
 }
 
 /**
@@ -42,6 +55,7 @@ export interface EditorHookState {
   serverClock: number;
   localClock: number;
   lockStatus: LockStatus;
+  lockAcquiredAt: number | null;
   isLoading: boolean;
   error: string | null;
 }

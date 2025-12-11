@@ -130,27 +130,30 @@ async def release_lock(request: LockRequest):
 @app.post("/document/update", response_model=UpdateResponse)
 async def update_document(request: DocumentUpdate):
     """
-    ===== ALGORITMOS 1, 2 e 3 COMBINADOS =====
+    ===== ALGORITMOS 1, 2, 3 e DETECÇÃO DE CONFLITOS =====
 
     Atualiza o conteúdo do documento aplicando todos os algoritmos:
 
     1. EXCLUSÃO MÚTUA: Verifica se o cliente tem o lock
     2. RELÓGIOS DE LAMPORT: Atualiza clock com max(clock_servidor, clock_cliente) + 1
     3. TRATAMENTO DE FALHAS: Verifica timeouts e renova o lock
+    4. DETECÇÃO DE CONFLITOS: Compara hash do conteúdo ao adquirir lock vs agora
 
     Args:
         request: Contém:
             - client_id: ID do cliente
             - content: Novo conteúdo do documento
             - client_clock: Relógio lógico de Lamport do cliente
+            - content_hash_before: Hash SHA-256 do conteúdo ao adquirir lock
 
     Returns:
-        UpdateResponse: Resultado da atualização com novo relógio do servidor
+        UpdateResponse: Resultado da atualização com novo relógio e flag de conflito
     """
-    success, message, new_clock = editor_service.update_document(
+    success, message, new_clock, conflict_detected = editor_service.update_document(
         client_id=request.client_id,
         content=request.content,
-        client_clock=request.client_clock
+        client_clock=request.client_clock,
+        content_hash_before=request.content_hash_before
     )
 
     if not success:
@@ -159,7 +162,8 @@ async def update_document(request: DocumentUpdate):
     return UpdateResponse(
         success=success,
         message=message,
-        new_lamport_clock=new_clock
+        new_lamport_clock=new_clock,
+        conflict_detected=conflict_detected
     )
 
 

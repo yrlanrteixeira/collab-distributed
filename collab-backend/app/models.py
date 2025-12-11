@@ -22,6 +22,7 @@ class DocumentUpdate(BaseModel):
     client_id: str = Field(..., description="ID do cliente enviando a atualização")
     content: str = Field(..., description="Novo conteúdo do documento")
     client_clock: int = Field(..., ge=0, description="Relógio lógico de Lamport do cliente")
+    content_hash_before: Optional[str] = Field(None, description="Hash SHA-256 do conteúdo quando o cliente adquiriu o lock (para detectar conflitos)")
 
 
 # ===== RESPONSE MODELS =====
@@ -36,6 +37,7 @@ class LockResponse(BaseModel):
 class DocumentState(BaseModel):
     """Estado completo do documento e sistema"""
     content: str = Field(..., description="Conteúdo atual do documento")
+    content_hash: str = Field(..., description="Hash SHA-256 do conteúdo atual")
     lamport_clock: int = Field(..., description="Relógio lógico de Lamport do servidor")
     lock_holder: Optional[str] = Field(None, description="ID do cliente que possui o lock (None se livre)")
     lock_acquired_at: Optional[float] = Field(None, description="Timestamp de quando o lock foi adquirido")
@@ -46,3 +48,4 @@ class UpdateResponse(BaseModel):
     success: bool = Field(..., description="Se a atualização foi bem-sucedida")
     message: str = Field(..., description="Mensagem descritiva do resultado")
     new_lamport_clock: int = Field(..., description="Novo valor do relógio lógico após atualização")
+    conflict_detected: bool = Field(False, description="Se houve conflito (conteúdo mudou entre leitura e escrita)")

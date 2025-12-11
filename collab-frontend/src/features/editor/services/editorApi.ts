@@ -31,12 +31,15 @@ export const releaseLock = async (clientId: string): Promise<void> => {
 export const updateDocument = async (
   clientId: string,
   content: string,
-  clientClock: number
-): Promise<void> => {
+  clientClock: number,
+  contentHashBefore?: string
+): Promise<{ conflict_detected: boolean }> => {
   const payload: DocumentUpdateRequest = {
     client_id: clientId,
     content,
     client_clock: clientClock,
+    content_hash_before: contentHashBefore,
   };
-  await api.post('/document/update', payload);
+  const response = await api.post('/document/update', payload);
+  return response.data;
 };
